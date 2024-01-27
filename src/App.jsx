@@ -3,66 +3,25 @@ import { useEffect } from 'react';
 import {
   Editor,
   EditorState,
-  CompositeDecorator,
-  ContentState,
   convertFromRaw,
   convertToRaw,
   getDefaultKeyBinding,
   Modifier,
 } from 'draft-js';
 import 'draft-js/dist/Draft.css';
+import { blockRenderMap } from './components/Extended';
+import { DefaultDraftBlockRenderMap } from 'draft-js';
 
 export default function App() {
-  const headingStrategy = (contentBlock, callback) => {
-    const text = contentBlock.getText();
-    if (text.startsWith('# ')) {
-      callback(0, 2);
-    }
-  };
+  const [editorState, setEditorState] = useState(EditorState.createEmpty());
 
-  const boldStrategy = (contentBlock, callback) => {
-    const text = contentBlock.getText();
-    if (text.startsWith('* ')) {
-      callback(0, 2);
-    }
-  };
+  // Extend the blockRenderMap
+  const extendedBlockRenderMap =
+    DefaultDraftBlockRenderMap.merge(blockRenderMap);
 
-  const makeItRedStrategy = (contentBlock, callback) => {
-    const text = contentBlock.getText();
-    if (text.startsWith('** ')) {
-      callback(0, 3);
-    }
-  };
-
-  const underLineStrategy = (contentBlock, callback) => {
-    const text = contentBlock.getText();
-    if (text.startsWith('*** ')) {
-      callback(0, 4);
-    }
-  };
-
-  const HeadingSpan = (props) => {
-    return <span className='text-2xl font-semibold'>{props.children}</span>;
-  };
-
-  const BoldSpan = (props) => {
-    console.log(props.children);
-    return <span style={{ fontWeight: 'bold' }}>{props.children}</span>;
-  };
-
-  const RedSpan = (props) => {
-    return <span style={{ color: 'red' }}>{props.children}</span>;
-  };
-
-  const UnderLineSpan = (props) => {
-    return (
-      <span style={{ textDecoration: 'underline' }}>{props.children}</span>
-    );
-  };
-
-  const handleChange = (newEditorState = editorState) => {
+  const handleChange = (newEditorState) => {
     setEditorState(newEditorState);
-    console.log(convertToRaw(newEditorState.getCurrentContent()));
+    setEditorState(EditorState.moveFocusToEnd(newEditorState));
   };
 
   const handleSave = () => {
@@ -73,65 +32,35 @@ export default function App() {
     );
   };
 
-  const compositeDecorator = new CompositeDecorator([
-    // {
-    //   strategy: headingStrategy,
-    //   component: HeadingSpan,
-    // },
-    {
-      strategy: boldStrategy,
-      component: BoldSpan,
-    },
-    {
-      strategy: makeItRedStrategy,
-      component: RedSpan,
-    },
-    {
-      strategy: underLineStrategy,
-      component: UnderLineSpan,
-    },
-  ]);
-
-  const [editorState, setEditorState] = useState(
-    EditorState.createEmpty(compositeDecorator)
-  );
-
   useEffect(() => {
-    // Example of loading existing content from storage
     const savedContent = localStorage.getItem('editorContent');
     if (savedContent) {
       const contentState = convertFromRaw(JSON.parse(savedContent));
-      setEditorState(
-        EditorState.createWithContent(contentState, compositeDecorator)
-      );
+      setEditorState(EditorState.createWithContent(contentState));
     }
   }, []);
 
-  const handleBeforeInput = (
-    chars = '',
-    editorState = EditorState.createEmpty()
-  ) => {
+  const handleBeforeInput = (chars, editorState) => {
     const currentContent = editorState.getCurrentContent();
     const selection = editorState.getSelection();
     const currentBlock = currentContent.getBlockForKey(selection.getStartKey());
-    const text = currentBlock.getText();
-    console.log({
-      chars,
-      text,
-      selection: selection.getStartOffset(),
-      startsWith: text.startsWith('# '),
-    });
 
-    // if the first character is '#' and a space then remove the #, also make it header-one
-    if (text === '#' && chars === ' ') {
-      // Remove the #
+    const text = currentBlock.getText();
+
+    /**
+     * Set the type of the editor at the specified offset with the provided component.
+     *
+     * @param {number} offset - the offset where to set the editor type
+     * @param {string} component - the component to set as the editor type
+     * @return {string} 'handled' indicating the function has completed
+     */
+    function setEditorType(offset, component) {
       const newContentState = Modifier.replaceText(
         currentContent,
         selection.merge({
-          anchorOffset: selection.getStartOffset() - 2,
-          focusOffset: selection.getStartOffset(),
-        }),
-        ''
+          anchorOffset: selection.getAnchorOffset() - offset,
+          focusOffset: selection.getFocusOffset(),
+        })
       );
       const newEditorState = EditorState.push(
         editorState,
@@ -142,7 +71,7 @@ export default function App() {
       const newHeaderContentState = Modifier.setBlockType(
         newContentState,
         selection,
-        'bold'
+        component
       );
       const newHeaderEditorState = EditorState.push(
         editorState,
@@ -153,47 +82,21 @@ export default function App() {
       return 'handled';
     }
 
-    if(text==='*' && chars === ' '){
-      const newContentState = Modifier.replaceText(
-        currentContent,
-        selection.merge({
-          anchorOffset: selection.getStartOffset() - 2,
-          focusOffset: selection.getStartOffset(),
-        }),
-        ''
-      );
-
-      const newEditorState = EditorState.push(
-        editorState,
-        newContentState,
-        'change-block-data'
-      );
-      setEditorState(newEditorState);
+    if (chars === ' ') {
+      switch (text) {
+        case '#':
+          return setEditorType(1, 'header-span');
+        case '*':
+          return setEditorType(1, 'bold-span');
+        case '**':
+          return setEditorType(2, 'red-span');
+        case '***':
+          return setEditorType(3, 'underline-span');
+        default:
+          return 'not-handled';
+      }
     }
     return 'not-handled';
-  };
-
-  const keyBindingFn = (e) => {
-    // reset the next block to unstyled
-
-    if (e.key === 'Enter') {
-      console.log('Here');
-
-      // const nextLineContentState = Modifier.setBlockType(editorState.getCurrentContent(), editorState.getSelection(), 'unstyled')
-      // const updatedEditorState = EditorState.push(editorState, nextLineContentState, 'change-block-type')
-      const newContentState = Modifier.setBlockType(
-        editorState.getCurrentContent(),
-        editorState.getSelection(),
-        'unstyled'
-      );
-      const newEditorState = EditorState.push(
-        editorState,
-        newContentState,
-        'change-block-type'
-      );
-      setEditorState(newEditorState);
-    }
-    return getDefaultKeyBinding(e);
   };
 
   return (
@@ -204,17 +107,17 @@ export default function App() {
         </div>
         <button
           onClick={handleSave}
-          className='bg-slate-800 hover:shadow-lg self-end hover:scale-105 duration-300 text-white p-2 rounded-lg'
+          className='bg-white hover:shadow-lg duration-300 text-slate-700 px-3 py-1 rounded-md border-2 border-gray-600'
         >
           Save
         </button>
       </div>
-      <div className='shadow rounded-lg bg-gray-50 h-full w-full p-5'>
+      <div className='shadow rounded-lg bg-gray-50 h-full w-full p-5 overflow-y-auto'>
         <Editor
           editorState={editorState}
           onChange={handleChange}
           handleBeforeInput={(chars) => handleBeforeInput(chars, editorState)}
-          keyBindingFn={keyBindingFn}
+          blockRenderMap={extendedBlockRenderMap}
         />
       </div>
     </div>
