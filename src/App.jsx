@@ -5,7 +5,6 @@ import {
   EditorState,
   convertFromRaw,
   convertToRaw,
-  getDefaultKeyBinding,
   Modifier,
 } from 'draft-js';
 import 'draft-js/dist/Draft.css';
@@ -21,7 +20,6 @@ export default function App() {
 
   const handleChange = (newEditorState) => {
     setEditorState(newEditorState);
-    setEditorState(EditorState.moveFocusToEnd(newEditorState));
   };
 
   const handleSave = () => {
@@ -73,12 +71,13 @@ export default function App() {
         selection,
         component
       );
-      const newHeaderEditorState = EditorState.push(
+      const newBlockEditorState = EditorState.push(
         editorState,
         newHeaderContentState,
         'change-block-type'
       );
-      setEditorState(newHeaderEditorState);
+      setEditorState(newBlockEditorState);
+      setEditorState(EditorState.moveFocusToEnd(newBlockEditorState));
       return 'handled';
     }
 

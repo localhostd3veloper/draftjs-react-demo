@@ -5,7 +5,6 @@ export const HeadingSpan = (props) => {
 };
 
 export const BoldSpan = (props) => {
-  console.log(props.children);
   return <span style={{ fontWeight: 'bold' }}>{props.children}</span>;
 };
 
@@ -17,8 +16,7 @@ export const UnderLineSpan = (props) => {
   return <span style={{ textDecoration: 'underline' }}>{props.children}</span>;
 };
 
-
-export const blockRenderMap = Map({
+export const blockRenderMap = new Map({
   'header-span': {
     element: 'span',
     wrapper: <HeadingSpan />,
